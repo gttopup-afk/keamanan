@@ -31,24 +31,32 @@
   function safeGet(k){ try{ return nativeGet.call(storage,k); }catch(_){ return null; } }
   function safeSet(k,v){ try{ nativeSet.call(storage,k,String(v)); }catch(_){} }
   function safeRemove(k){ try{ nativeRemove.call(storage,k); }catch(_){} }
-  function readJson(raw){ try{ return raw ? JSON.parse(raw) : null; }catch(_){ return null; } }
-  function validAccent(v){ v = String(v || '').trim(); return PALETTES[v] ? v : DEFAULTS.accent; }
-  function validLanguage(v){ v = String(v || '').trim(); return LANG_META[v] ? v : DEFAULTS.language; }
+  function readJson(raw){
+    try{
+      if(typeof raw !== 'string' || raw.length > 16384) return null;
+      return JSON.parse(raw, function(key, value){
+        if(key === '__proto__' || key === 'prototype' || key === 'constructor') throw new TypeError('DIRAC_PREF_KEY_INVALID');
+        return value;
+      });
+    }catch(_){ return null; }
+  }
+  function validAccent(v){ v = String(v || '').trim(); return Object.prototype.hasOwnProperty.call(PALETTES, v) ? v : DEFAULTS.accent; }
+  function validLanguage(v){ v = String(v || '').trim(); return Object.prototype.hasOwnProperty.call(LANG_META, v) ? v : DEFAULTS.language; }
   function validMode(v){ v = String(v || '').trim(); return /^(dark|light|auto)$/.test(v) ? v : DEFAULTS.mode; }
   function validMotion(v){ v = String(v || '').trim(); return /^(full|reduced|none|normal|hemat)$/.test(v) ? v : DEFAULTS.motion; }
   function validContrast(v){ v = String(v || '').trim(); return /^(on|off)$/.test(v) ? v : DEFAULTS.contrast; }
-  function validCurrency(v){ v = String(v || '').trim().toUpperCase(); return CURRENCIES[v] ? v : DEFAULTS.currency; }
+  function validCurrency(v){ v = String(v || '').trim().toUpperCase(); return Object.prototype.hasOwnProperty.call(CURRENCIES, v) ? v : DEFAULTS.currency; }
   function sanitize(obj){
     obj = obj && typeof obj === 'object' ? obj : {};
     return {mode:validMode(obj.mode),accent:validAccent(obj.accent),language:validLanguage(obj.language),motion:validMotion(obj.motion),contrast:validContrast(obj.contrast),currency:validCurrency(obj.currency)};
   }
   function readTheme(){
     var stored = {accent:safeGet(ACCENT_KEY),language:safeGet(LANGUAGE_KEY) || safeGet('dirac_language_v1')};
-    return sanitize(Object.assign({}, DEFAULTS, memoryPrefs || {}, stored));
+    return sanitize(Object.assign(Object.create(null), DEFAULTS, memoryPrefs || {}, stored));
   }
   function writeTheme(p){
-    var next = sanitize(Object.assign({}, readTheme(), p || {}));
-    memoryPrefs = Object.assign({}, next);
+    var next = sanitize(Object.assign(Object.create(null), readTheme(), p || {}));
+    memoryPrefs = Object.assign(Object.create(null), next);
     safeSet(ACCENT_KEY, next.accent);
     safeSet(LANGUAGE_KEY, next.language);
   }
@@ -67,7 +75,7 @@
     var current = readJson(safeGet(THEME_KEY)) || {};
     ['dirac_theme_settings_v2','dirac_theme_settings_v1'].forEach(function(k){
       var data = readJson(safeGet(k));
-      if(data && typeof data === 'object') current = Object.assign({}, current, data);
+      if(data && typeof data === 'object') current = Object.assign(Object.create(null), current, data);
     });
     var acc = safeGet(ACCENT_KEY); if(acc) current.accent = acc;
     var lang = safeGet(LANGUAGE_KEY) || safeGet('dirac_language_v1'); if(lang) current.language = lang;
@@ -100,9 +108,9 @@
   proto.getItem = function(key){
     key = String(key);
     if(this !== storage) return nativeGet.apply(this, arguments);
-    if(key === THEME_KEY || LEGACY_THEME_KEYS[key]) return JSON.stringify(prefs());
+    if(key === THEME_KEY || Object.prototype.hasOwnProperty.call(LEGACY_THEME_KEYS,key)) return JSON.stringify(prefs());
     if(key === ACCENT_KEY) return prefs().accent;
-    if(key === LANGUAGE_KEY || LEGACY_LANGUAGE_KEYS[key]) return prefs().language;
+    if(key === LANGUAGE_KEY || Object.prototype.hasOwnProperty.call(LEGACY_LANGUAGE_KEYS,key)) return prefs().language;
     if(key === CURRENCY_KEY) return prefs().currency;
     if(key === MOTION_KEY) return prefs().motion;
     return null;
@@ -110,9 +118,9 @@
   proto.setItem = function(key, value){
     key = String(key);
     if(this !== storage) return nativeSet.apply(this, arguments);
-    if(key === THEME_KEY || LEGACY_THEME_KEYS[key]){ var data = readJson(String(value || '')) || {}; writeTheme(data); purgeDisallowed(); applyPrefs(); emit('theme'); return; }
+    if(key === THEME_KEY || Object.prototype.hasOwnProperty.call(LEGACY_THEME_KEYS,key)){ var data = readJson(String(value || '')) || {}; writeTheme(data); purgeDisallowed(); applyPrefs(); emit('theme'); return; }
     if(key === ACCENT_KEY){ writeTheme({accent:value}); purgeDisallowed(); applyPrefs(); emit('accent'); return; }
-    if(key === LANGUAGE_KEY || LEGACY_LANGUAGE_KEYS[key]){ writeTheme({language:value}); purgeDisallowed(); applyPrefs(); emit('language'); return; }
+    if(key === LANGUAGE_KEY || Object.prototype.hasOwnProperty.call(LEGACY_LANGUAGE_KEYS,key)){ writeTheme({language:value}); purgeDisallowed(); applyPrefs(); emit('language'); return; }
     if(key === CURRENCY_KEY){ writeTheme({currency:value}); purgeDisallowed(); applyPrefs(); emit('currency'); return; }
     if(key === MOTION_KEY){ writeTheme({motion:value}); purgeDisallowed(); applyPrefs(); emit('motion'); return; }
     purgeDisallowed(); return undefined;
@@ -120,9 +128,9 @@
   proto.removeItem = function(key){
     key = String(key);
     if(this !== storage) return nativeRemove.apply(this, arguments);
-    if(key === THEME_KEY || LEGACY_THEME_KEYS[key]){ memoryPrefs = {}; safeRemove(ACCENT_KEY); safeRemove(LANGUAGE_KEY); purgeDisallowed(); applyPrefs(); emit('theme-reset'); return; }
+    if(key === THEME_KEY || Object.prototype.hasOwnProperty.call(LEGACY_THEME_KEYS,key)){ memoryPrefs = {}; safeRemove(ACCENT_KEY); safeRemove(LANGUAGE_KEY); purgeDisallowed(); applyPrefs(); emit('theme-reset'); return; }
     if(key === ACCENT_KEY){ writeTheme({accent:DEFAULTS.accent}); applyPrefs(); emit('accent-reset'); return; }
-    if(key === LANGUAGE_KEY || LEGACY_LANGUAGE_KEYS[key]){ writeTheme({language:DEFAULTS.language}); applyPrefs(); emit('language-reset'); return; }
+    if(key === LANGUAGE_KEY || Object.prototype.hasOwnProperty.call(LEGACY_LANGUAGE_KEYS,key)){ writeTheme({language:DEFAULTS.language}); applyPrefs(); emit('language-reset'); return; }
     if(key === CURRENCY_KEY){ writeTheme({currency:DEFAULTS.currency}); applyPrefs(); emit('currency-reset'); return; }
     if(key === MOTION_KEY){ writeTheme({motion:DEFAULTS.motion}); applyPrefs(); emit('motion-reset'); return; }
     return;
@@ -133,7 +141,7 @@
   window.diracApplyGlobalPrefs = applyPrefs;
   window.diracSetGlobalAccent = function(accent){ storage.setItem(ACCENT_KEY, accent); };
   window.diracSetGlobalLanguage = function(language){ storage.setItem(LANGUAGE_KEY, language); };
-  window.diracSetGlobalTheme = function(patch){ storage.setItem(THEME_KEY, JSON.stringify(Object.assign({}, prefs(), patch || {}))); };
+  window.diracSetGlobalTheme = function(patch){ storage.setItem(THEME_KEY, JSON.stringify(Object.assign(Object.create(null), prefs(), patch || {}))); };
 
   document.addEventListener('click', function(e){
     var target = e.target && e.target.closest ? e.target.closest('[data-accent],button[data-language],[role="button"][data-language],[data-language-option],[data-theme-mode],[data-motion-choice],[data-contrast],[data-currency]') : null;
@@ -168,7 +176,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)">
-<meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; script-src &#x27;sha512-IS0NH0O6Dzb6JiVJAKkHec8jDkCsihTZ1qgSaKnsH8GUrXcKsZvawkHcIo1vstEK6GNczatdjr1ATUFsRtB4SA==&#x27; &#x27;self&#x27; &#x27;sha512-2zcvSlCWgHb6dLb32Syc3/6phTFbDXtcdSX9kOpibcla24ujLSIb3FZHlh+0XbTLXCjOLLryiW4ApdFZNgBEWg==&#x27; &#x27;sha512-UmF9fk7aQNl8JqpOJ+/SCvPUPhTYgOqKtxwPri2GWxdfv8wtxS+P8ib41WZWIdcRg/4su1lYW9Q5nzGPKiqvaQ==&#x27; &#x27;sha512-4XFDNCvsz9MkkGbTXq9f7qN+GfydFnpFLybaJG+GnLUhAkfgzVRXPIYoC2Jo2V1KobiVnqsOPKeFNAu3EmqZLA==&#x27; &#x27;sha512-vsN8xqSeT9RJy8kwXkpr1KQGmPZ8GAtUrz/kDHDubJJOcfl0E3iHcbv0dTRNDFMD3hxGLwrzSFLgiQZVZVvF8A==&#x27; &#x27;sha512-Du2fNyYTUN1Zltua+n3lH8on0RzFkBzDBRvrX9jR2bDU7aPAbr+uvB5QKdd0FRVrCRu9MwUUDErLr09AF3Y0Rw==&#x27; &#x27;sha512-Z1AAFEfhc+4WjggguGHEH20EVZPJHpLj7IXfXPAJQXbtiyXV3U1npf/mSpRjm1J4tdhGtWqsV50n0nyCcpWiiQ==&#x27; &#x27;sha512-Qf/H8wMEz9EtwgFlrN13mt+/zh9eT/T0xWOS/MAMoTeQT1VHL+IRM4BbHRBV/FsWjgF2/pDxgFx1BXVSdkdVkQ==&#x27; &#x27;sha512-6LbI18bzjDZfAMht/DcbIRhhzcGJ0TL69/nc5SSMt0QHhhjLwOSOUsoOrT56dPUusoKXHGaakWUDmQJOpAAsWw==&#x27; &#x27;sha512-LUVLPsAbZebhNt0DMXad384s6103eebT+kHwqwr3BZiSTyMqol1A9erOWOfneSMEQjMllc2REjSJ3LeFtYaB9g==&#x27; &#x27;sha512-adaVa4uUyy6zwgmh7sX3GaZxcOo5RbBf1BlY/kaNwoXadPgBVkSdY/EC+FK+/VN1p1G+a4vPll3SiS7uCkKULQ==&#x27; &#x27;sha512-7qzR7V7xRIwXbwzAXNTOHpPsYVF8EsD4pV9nH+cYxE3cREE0mNR+MdIbzqtLCdbpBACy0b9cZ3CwjX2Z9nQmlQ==&#x27; &#x27;sha512-2UCaz2I8HFzjxwr0EoNBWNCW7vbEMdv8AtWqNJY+P/52EJHcb94jtxMrZioP3YEfsUvko4p4U6mYvNvY6Mg9DQ==&#x27; &#x27;sha512-aSbJo8bEB7S91jbdQ+bBgjPBY+jOyoo6HV/Nt7Z8+YVvjbKQ8uS5J/ggl8u5G3dzdJ8DtfNSrg+QHBlbgYLEmA==&#x27; &#x27;sha512-ca1dPfWw4OnCP2yajr5Avfd3/TiGvK8c05ftDOzC9R38O6WABmZK0CGywrnVdOovIqaSXli39A8Ey2I6PqbNcg==&#x27; &#x27;sha512-+N+I+QydgUOS9s4CAPwqU4CsKjs9jGn9+J4GZ+d7ENdhpjYgFpp5ZOoO2ucUqEI2yPGQUVsb8IzyQZTT9gKRbg==&#x27; &#x27;sha512-9floGwMk3aV8nZeIa7GWdm/RdorZYFR9sxtcsh1dBQOIf4mVjI3T/xJcKrDCFFVKutFZU/eD2BZcDWjsXBp27w==&#x27; &#x27;sha512-6vKUB+ZCXCzjJOcngbK05QUJAaLtTpKgHT3nE0khdHhIISmFTlBllyn4XRMlGt6l9H8Z/3IN/DXdflsUCXjC7A==&#x27; &#x27;sha512-Fkn4eV+ajtOPSHBy+riI5yqyTIhcB0FkJBtIYAnt0gECps2Sjq3+/UyurvTgq5sdywYe0nY963BwYjmZ6KeJFA==&#x27; &#x27;sha512-FHSza95XooSj6RMO3vyyx0P1MOwloAN8P/nrLqi49h77bUPtlsIjDfkHHcKRKbwaiuzwu4GkF7XTXIS1Ei1sBw==&#x27; &#x27;sha512-01N9U+yVxiyXuAU2qgdlVnqxtQ8nys/CZouYO9fK8/rZ3BkzpwQxq+m2f8/Rc9J8YPNCcJVrsUdse1pZY6Iccw==&#x27; &#x27;sha512-cVSo0SQlXNiMO+RYHS6745Qh8Qpu7P7TR3/vSHPtdG1IrPRp23Ubujr1/xUOTpkniZQVEDc/GnOwUeR34ERFxA==&#x27; &#x27;sha512-i7Ay5/Cb24fnFrRQl5riwMOqJ1u4J7fgKzz2WTnBEcWO06Od82cQDQNl/zsk4DS/MSgokYQbxQhOWO7EOEMkJg==&#x27; &#x27;sha512-vkFVXkNtq/l/d6U4MKQGHiDGwbXjgTPpTCu3wKtK0cB6ePonqkLKyLJomcMu9TWl/zhpqCjG8JoSkTMKWUoviw==&#x27; &#x27;sha512-seZtT4OK0G0jP5mZuC/cwNtJEmA0/xUVe7xLuDAyrF8an01bWi2NjaU+s+tZBIB7//P5eptsf+AHrZ6jIq9lrQ==&#x27; &#x27;sha512-MjdGN+7DC5fN61P1tHM8jKehWePiZzw/ZW9VuYQRbOGgb7mopMy/yQc53UkBY9KSnLPwq+VsQA8y6Mmt7JSyaQ==&#x27; &#x27;sha512-jn1Lh8H3+KcXP5S+SQ2UvJ84lNDyD8MwzcfM9YvQkd+qICF6YMXm68XYpaYGaoiBkx5XZsBYjUV6xtL/UNRxAA==&#x27;; script-src-elem &#x27;sha512-IS0NH0O6Dzb6JiVJAKkHec8jDkCsihTZ1qgSaKnsH8GUrXcKsZvawkHcIo1vstEK6GNczatdjr1ATUFsRtB4SA==&#x27; &#x27;self&#x27; &#x27;sha512-2zcvSlCWgHb6dLb32Syc3/6phTFbDXtcdSX9kOpibcla24ujLSIb3FZHlh+0XbTLXCjOLLryiW4ApdFZNgBEWg==&#x27; &#x27;sha512-UmF9fk7aQNl8JqpOJ+/SCvPUPhTYgOqKtxwPri2GWxdfv8wtxS+P8ib41WZWIdcRg/4su1lYW9Q5nzGPKiqvaQ==&#x27; &#x27;sha512-4XFDNCvsz9MkkGbTXq9f7qN+GfydFnpFLybaJG+GnLUhAkfgzVRXPIYoC2Jo2V1KobiVnqsOPKeFNAu3EmqZLA==&#x27; &#x27;sha512-vsN8xqSeT9RJy8kwXkpr1KQGmPZ8GAtUrz/kDHDubJJOcfl0E3iHcbv0dTRNDFMD3hxGLwrzSFLgiQZVZVvF8A==&#x27; &#x27;sha512-Du2fNyYTUN1Zltua+n3lH8on0RzFkBzDBRvrX9jR2bDU7aPAbr+uvB5QKdd0FRVrCRu9MwUUDErLr09AF3Y0Rw==&#x27; &#x27;sha512-Z1AAFEfhc+4WjggguGHEH20EVZPJHpLj7IXfXPAJQXbtiyXV3U1npf/mSpRjm1J4tdhGtWqsV50n0nyCcpWiiQ==&#x27; &#x27;sha512-Qf/H8wMEz9EtwgFlrN13mt+/zh9eT/T0xWOS/MAMoTeQT1VHL+IRM4BbHRBV/FsWjgF2/pDxgFx1BXVSdkdVkQ==&#x27; &#x27;sha512-6LbI18bzjDZfAMht/DcbIRhhzcGJ0TL69/nc5SSMt0QHhhjLwOSOUsoOrT56dPUusoKXHGaakWUDmQJOpAAsWw==&#x27; &#x27;sha512-LUVLPsAbZebhNt0DMXad384s6103eebT+kHwqwr3BZiSTyMqol1A9erOWOfneSMEQjMllc2REjSJ3LeFtYaB9g==&#x27; &#x27;sha512-adaVa4uUyy6zwgmh7sX3GaZxcOo5RbBf1BlY/kaNwoXadPgBVkSdY/EC+FK+/VN1p1G+a4vPll3SiS7uCkKULQ==&#x27; &#x27;sha512-7qzR7V7xRIwXbwzAXNTOHpPsYVF8EsD4pV9nH+cYxE3cREE0mNR+MdIbzqtLCdbpBACy0b9cZ3CwjX2Z9nQmlQ==&#x27; &#x27;sha512-2UCaz2I8HFzjxwr0EoNBWNCW7vbEMdv8AtWqNJY+P/52EJHcb94jtxMrZioP3YEfsUvko4p4U6mYvNvY6Mg9DQ==&#x27; &#x27;sha512-aSbJo8bEB7S91jbdQ+bBgjPBY+jOyoo6HV/Nt7Z8+YVvjbKQ8uS5J/ggl8u5G3dzdJ8DtfNSrg+QHBlbgYLEmA==&#x27; &#x27;sha512-ca1dPfWw4OnCP2yajr5Avfd3/TiGvK8c05ftDOzC9R38O6WABmZK0CGywrnVdOovIqaSXli39A8Ey2I6PqbNcg==&#x27; &#x27;sha512-+N+I+QydgUOS9s4CAPwqU4CsKjs9jGn9+J4GZ+d7ENdhpjYgFpp5ZOoO2ucUqEI2yPGQUVsb8IzyQZTT9gKRbg==&#x27; &#x27;sha512-9floGwMk3aV8nZeIa7GWdm/RdorZYFR9sxtcsh1dBQOIf4mVjI3T/xJcKrDCFFVKutFZU/eD2BZcDWjsXBp27w==&#x27; &#x27;sha512-6vKUB+ZCXCzjJOcngbK05QUJAaLtTpKgHT3nE0khdHhIISmFTlBllyn4XRMlGt6l9H8Z/3IN/DXdflsUCXjC7A==&#x27; &#x27;sha512-Fkn4eV+ajtOPSHBy+riI5yqyTIhcB0FkJBtIYAnt0gECps2Sjq3+/UyurvTgq5sdywYe0nY963BwYjmZ6KeJFA==&#x27; &#x27;sha512-FHSza95XooSj6RMO3vyyx0P1MOwloAN8P/nrLqi49h77bUPtlsIjDfkHHcKRKbwaiuzwu4GkF7XTXIS1Ei1sBw==&#x27; &#x27;sha512-01N9U+yVxiyXuAU2qgdlVnqxtQ8nys/CZouYO9fK8/rZ3BkzpwQxq+m2f8/Rc9J8YPNCcJVrsUdse1pZY6Iccw==&#x27; &#x27;sha512-cVSo0SQlXNiMO+RYHS6745Qh8Qpu7P7TR3/vSHPtdG1IrPRp23Ubujr1/xUOTpkniZQVEDc/GnOwUeR34ERFxA==&#x27; &#x27;sha512-i7Ay5/Cb24fnFrRQl5riwMOqJ1u4J7fgKzz2WTnBEcWO06Od82cQDQNl/zsk4DS/MSgokYQbxQhOWO7EOEMkJg==&#x27; &#x27;sha512-vkFVXkNtq/l/d6U4MKQGHiDGwbXjgTPpTCu3wKtK0cB6ePonqkLKyLJomcMu9TWl/zhpqCjG8JoSkTMKWUoviw==&#x27; &#x27;sha512-seZtT4OK0G0jP5mZuC/cwNtJEmA0/xUVe7xLuDAyrF8an01bWi2NjaU+s+tZBIB7//P5eptsf+AHrZ6jIq9lrQ==&#x27; &#x27;sha512-MjdGN+7DC5fN61P1tHM8jKehWePiZzw/ZW9VuYQRbOGgb7mopMy/yQc53UkBY9KSnLPwq+VsQA8y6Mmt7JSyaQ==&#x27; &#x27;sha512-jn1Lh8H3+KcXP5S+SQ2UvJ84lNDyD8MwzcfM9YvQkd+qICF6YMXm68XYpaYGaoiBkx5XZsBYjUV6xtL/UNRxAA==&#x27;; script-src-attr &#x27;none&#x27;; style-src &#x27;self&#x27; https://fonts.googleapis.com &#x27;sha512-1LEjt8c3XpczrPVDvgPvqqBxFfD4RwusDCsUlV+NhfnquPqFzx8zeiPIdcWL1m/IKwyZAvL9FSddgDp89OYhvw==&#x27; &#x27;sha512-kGxMkTnWNXyx7okNd1NoFEmUpy2UaETxiyhvR6CQwMMyEiqGPdN7nX/GrsTHeeuooinExEsp5H4Pel7RDHfAfg==&#x27; &#x27;sha512-4liJPB0+WSvwZ/D+/ZnplVIQxqmB846fD7KE0wz2P30FqrXc1e88gXIf9HueROqGd9FWEtKDLZuNaGbBQWXUrQ==&#x27; &#x27;sha512-c3uzKDRohz5+icH/feOsdpXgSuWaL8cSWYDI1/TCVnj2NU5EhqP27N7vKIeTbK87ya32DsCTK9n3J/7x8C1GGQ==&#x27; &#x27;sha512-RByjnmcR2aYT0aPXmaCDvp2QcX01dau95aKm45EtmUdCVVC/MK44Ua1TuyKp7Lg1iijGHkQEbTUSGxgcuSB4IQ==&#x27; &#x27;sha512-MyZ9NoEjFiqKEeHtOE0bkpYxA1FnA+3CfmRF7IrFojZS5t5Imktkh5hyB2pErOEz2cqOBQHgxXBu2v9OQ9VRjQ==&#x27; &#x27;sha512-TX2S4o9fKMd7MRkcKJ6s6lv1qIoDzRlft0brsCA1vorbxjq+Dzo0MybM632RZQLMZ3WtUmVjltfqWZXydjozxg==&#x27; &#x27;sha512-zJdE7jn4Zja99u//L33m46+HZvcgmBMFPOUEV/B6dvHvskxvOOSej3HyG9hlYa3KihYZKZjYJZa5LSWjc/8Haw==&#x27; &#x27;sha512-gBIcnPvwC2sOr15HqpkakVupeYvGS+BDiCwJy8dW6llVglASZDjqV3cJ6EU6UVx6mYp588XLEpnGOLQ4aH31Cg==&#x27; &#x27;sha512-vU22RlNkzUmL7LpqCjDjKhJVnR4u4GLQWBxQ/dP6WcDntPd+YmRxr0J9xVcmmvbA3ZHTkaDbqluAOVYvumZPgQ==&#x27; &#x27;sha512-bkIfqu5pKq+gsTG6XNXZJRS1m8SDF+dnS/DVI1o7JvKufEAnjd2tSPm016BVzCf0A4Ar4XooN0R1AQv8gDESCQ==&#x27; &#x27;sha512-ZRt1f80RmzekhH1Cw/d2O5qlZsaqPhq/DrEyv9ns+SPWVJRkfcWb9njPxzWphN8UHavq8uv9Pd5f0Z4r63/6cw==&#x27; &#x27;sha512-BNt3/LwPTPIF7bOPx/IJ7iAkLDhbZyJgD0ckDKtqyo0NHgyZdz1Qk69Fl0RmkqbAxRuv7v9k3lcN0HtaULVWlQ==&#x27; &#x27;sha512-jWYDl/Z52OKtcvRLdiGjL2nKj1d7hWe+AjafcghLVs4HCWAnPMFQnYMb1Y5KTQvGr1BrWJWW78el1atHwD8pSA==&#x27; &#x27;sha512-h0xrUXX1h1viY7gp0D1Jwe45Vs+ZDSUlR8n53jx8r5q3RP0IpL1K9mGKDYpkhQ+pnKuJZKsFU7yCJWnt6ohHNQ==&#x27; &#x27;sha512-EegNuvpqTcsmL6PtmpMrH1CZt7ye0mqlvcGKixkoNgp1wmK2WWHr+QVjEzmCeNIXCwE/g5NC/OT9jL5i0e3y8Q==&#x27; &#x27;sha512-/QqblG9fjNURNCstTU7L2WzUV64+MpJ1XQBVdhYJozgq4WLfE0sa3l3WbAXf05KwDa9Wy4ZCL6t4+8zJBG6z0w==&#x27; &#x27;sha512-c23p5EbnxBvRKO7RRiWBUGqPsrQUnmhqsduIdvka8FJ0wvWCXDgTxHuQWhvzFV4+0Ym4MBx+vXcqZhIVupFRcA==&#x27;; style-src-elem &#x27;self&#x27; https://fonts.googleapis.com &#x27;sha512-1LEjt8c3XpczrPVDvgPvqqBxFfD4RwusDCsUlV+NhfnquPqFzx8zeiPIdcWL1m/IKwyZAvL9FSddgDp89OYhvw==&#x27; &#x27;sha512-kGxMkTnWNXyx7okNd1NoFEmUpy2UaETxiyhvR6CQwMMyEiqGPdN7nX/GrsTHeeuooinExEsp5H4Pel7RDHfAfg==&#x27; &#x27;sha512-4liJPB0+WSvwZ/D+/ZnplVIQxqmB846fD7KE0wz2P30FqrXc1e88gXIf9HueROqGd9FWEtKDLZuNaGbBQWXUrQ==&#x27; &#x27;sha512-c3uzKDRohz5+icH/feOsdpXgSuWaL8cSWYDI1/TCVnj2NU5EhqP27N7vKIeTbK87ya32DsCTK9n3J/7x8C1GGQ==&#x27; &#x27;sha512-RByjnmcR2aYT0aPXmaCDvp2QcX01dau95aKm45EtmUdCVVC/MK44Ua1TuyKp7Lg1iijGHkQEbTUSGxgcuSB4IQ==&#x27; &#x27;sha512-MyZ9NoEjFiqKEeHtOE0bkpYxA1FnA+3CfmRF7IrFojZS5t5Imktkh5hyB2pErOEz2cqOBQHgxXBu2v9OQ9VRjQ==&#x27; &#x27;sha512-TX2S4o9fKMd7MRkcKJ6s6lv1qIoDzRlft0brsCA1vorbxjq+Dzo0MybM632RZQLMZ3WtUmVjltfqWZXydjozxg==&#x27; &#x27;sha512-zJdE7jn4Zja99u//L33m46+HZvcgmBMFPOUEV/B6dvHvskxvOOSej3HyG9hlYa3KihYZKZjYJZa5LSWjc/8Haw==&#x27; &#x27;sha512-gBIcnPvwC2sOr15HqpkakVupeYvGS+BDiCwJy8dW6llVglASZDjqV3cJ6EU6UVx6mYp588XLEpnGOLQ4aH31Cg==&#x27; &#x27;sha512-vU22RlNkzUmL7LpqCjDjKhJVnR4u4GLQWBxQ/dP6WcDntPd+YmRxr0J9xVcmmvbA3ZHTkaDbqluAOVYvumZPgQ==&#x27; &#x27;sha512-bkIfqu5pKq+gsTG6XNXZJRS1m8SDF+dnS/DVI1o7JvKufEAnjd2tSPm016BVzCf0A4Ar4XooN0R1AQv8gDESCQ==&#x27; &#x27;sha512-ZRt1f80RmzekhH1Cw/d2O5qlZsaqPhq/DrEyv9ns+SPWVJRkfcWb9njPxzWphN8UHavq8uv9Pd5f0Z4r63/6cw==&#x27; &#x27;sha512-BNt3/LwPTPIF7bOPx/IJ7iAkLDhbZyJgD0ckDKtqyo0NHgyZdz1Qk69Fl0RmkqbAxRuv7v9k3lcN0HtaULVWlQ==&#x27; &#x27;sha512-jWYDl/Z52OKtcvRLdiGjL2nKj1d7hWe+AjafcghLVs4HCWAnPMFQnYMb1Y5KTQvGr1BrWJWW78el1atHwD8pSA==&#x27; &#x27;sha512-h0xrUXX1h1viY7gp0D1Jwe45Vs+ZDSUlR8n53jx8r5q3RP0IpL1K9mGKDYpkhQ+pnKuJZKsFU7yCJWnt6ohHNQ==&#x27; &#x27;sha512-EegNuvpqTcsmL6PtmpMrH1CZt7ye0mqlvcGKixkoNgp1wmK2WWHr+QVjEzmCeNIXCwE/g5NC/OT9jL5i0e3y8Q==&#x27; &#x27;sha512-/QqblG9fjNURNCstTU7L2WzUV64+MpJ1XQBVdhYJozgq4WLfE0sa3l3WbAXf05KwDa9Wy4ZCL6t4+8zJBG6z0w==&#x27; &#x27;sha512-c23p5EbnxBvRKO7RRiWBUGqPsrQUnmhqsduIdvka8FJ0wvWCXDgTxHuQWhvzFV4+0Ym4MBx+vXcqZhIVupFRcA==&#x27;; style-src-attr &#x27;none&#x27;; font-src &#x27;self&#x27; https://fonts.gstatic.com data:; img-src &#x27;self&#x27; data: https: blob:; connect-src &#x27;self&#x27; https://diracgroup.store https://www.diracgroup.store https://api.diracgroup.store; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-src &#x27;none&#x27;; child-src &#x27;self&#x27; blob:; frame-ancestors &#x27;none&#x27;; worker-src &#x27;self&#x27; blob:; manifest-src &#x27;self&#x27;; media-src &#x27;self&#x27; data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; script-src &#x27;sha512-oV6R4Jmx/JkiURFjVji+Ud1EDqscWA/A6WzRc9hMLrbdXDp8oMyG5XR7YEiyyF8ZtPN3+hppiKpKMz2ioWrcrw==&#x27; &#x27;self&#x27; &#x27;sha512-GJrooVFsPmetluQPl5u+dk+gB6O/E8DJCm5wS4yMxA85ZBhs+8vdta1aKaqVJ6SXeYpzL2cyCaIMA5fbCAzFsQ==&#x27; &#x27;sha512-oozhVYKPPbIZCUJee8P/X3zMmDS9gUgUerkXaqESZ9u+C+JXBCJGpezm8Vjv5NDOfWuTS2tDufLizUjs+FUZrA==&#x27; &#x27;sha512-4XFDNCvsz9MkkGbTXq9f7qN+GfydFnpFLybaJG+GnLUhAkfgzVRXPIYoC2Jo2V1KobiVnqsOPKeFNAu3EmqZLA==&#x27; &#x27;sha512-xq/mGiBGR804xfxqdNK54gpwdoUlTAjZ5bfjTfD8D18Bfi1qW3iit5KRYGbEOx2YXmooAup28gPta2Ai0JDUtA==&#x27; &#x27;sha512-Du2fNyYTUN1Zltua+n3lH8on0RzFkBzDBRvrX9jR2bDU7aPAbr+uvB5QKdd0FRVrCRu9MwUUDErLr09AF3Y0Rw==&#x27; &#x27;sha512-Z1AAFEfhc+4WjggguGHEH20EVZPJHpLj7IXfXPAJQXbtiyXV3U1npf/mSpRjm1J4tdhGtWqsV50n0nyCcpWiiQ==&#x27; &#x27;sha512-Qf/H8wMEz9EtwgFlrN13mt+/zh9eT/T0xWOS/MAMoTeQT1VHL+IRM4BbHRBV/FsWjgF2/pDxgFx1BXVSdkdVkQ==&#x27; &#x27;sha512-6LbI18bzjDZfAMht/DcbIRhhzcGJ0TL69/nc5SSMt0QHhhjLwOSOUsoOrT56dPUusoKXHGaakWUDmQJOpAAsWw==&#x27; &#x27;sha512-LUVLPsAbZebhNt0DMXad384s6103eebT+kHwqwr3BZiSTyMqol1A9erOWOfneSMEQjMllc2REjSJ3LeFtYaB9g==&#x27; &#x27;sha512-o7ZMwAp8qYRbeDGL0cp8IhxK5WkkHnUn0i5I/zr4OryG3yhkXuBb+hFjZit7xH8mXKUoE3jdLYhk6MRdQ3e8Ug==&#x27; &#x27;sha512-7qzR7V7xRIwXbwzAXNTOHpPsYVF8EsD4pV9nH+cYxE3cREE0mNR+MdIbzqtLCdbpBACy0b9cZ3CwjX2Z9nQmlQ==&#x27; &#x27;sha512-2UCaz2I8HFzjxwr0EoNBWNCW7vbEMdv8AtWqNJY+P/52EJHcb94jtxMrZioP3YEfsUvko4p4U6mYvNvY6Mg9DQ==&#x27; &#x27;sha512-aSbJo8bEB7S91jbdQ+bBgjPBY+jOyoo6HV/Nt7Z8+YVvjbKQ8uS5J/ggl8u5G3dzdJ8DtfNSrg+QHBlbgYLEmA==&#x27; &#x27;sha512-DnysiUTVfvWJSJzOuOPK13ZC40iR2OLJgCFe2QZUSclWqWWyaKR4FW/6V7PrkCYG1fdl9u2E2kLkVPYV3ckpAQ==&#x27; &#x27;sha512-+N+I+QydgUOS9s4CAPwqU4CsKjs9jGn9+J4GZ+d7ENdhpjYgFpp5ZOoO2ucUqEI2yPGQUVsb8IzyQZTT9gKRbg==&#x27; &#x27;sha512-9floGwMk3aV8nZeIa7GWdm/RdorZYFR9sxtcsh1dBQOIf4mVjI3T/xJcKrDCFFVKutFZU/eD2BZcDWjsXBp27w==&#x27; &#x27;sha512-6vKUB+ZCXCzjJOcngbK05QUJAaLtTpKgHT3nE0khdHhIISmFTlBllyn4XRMlGt6l9H8Z/3IN/DXdflsUCXjC7A==&#x27; &#x27;sha512-Fkn4eV+ajtOPSHBy+riI5yqyTIhcB0FkJBtIYAnt0gECps2Sjq3+/UyurvTgq5sdywYe0nY963BwYjmZ6KeJFA==&#x27; &#x27;sha512-FHSza95XooSj6RMO3vyyx0P1MOwloAN8P/nrLqi49h77bUPtlsIjDfkHHcKRKbwaiuzwu4GkF7XTXIS1Ei1sBw==&#x27; &#x27;sha512-01N9U+yVxiyXuAU2qgdlVnqxtQ8nys/CZouYO9fK8/rZ3BkzpwQxq+m2f8/Rc9J8YPNCcJVrsUdse1pZY6Iccw==&#x27; &#x27;sha512-cVSo0SQlXNiMO+RYHS6745Qh8Qpu7P7TR3/vSHPtdG1IrPRp23Ubujr1/xUOTpkniZQVEDc/GnOwUeR34ERFxA==&#x27; &#x27;sha512-i7Ay5/Cb24fnFrRQl5riwMOqJ1u4J7fgKzz2WTnBEcWO06Od82cQDQNl/zsk4DS/MSgokYQbxQhOWO7EOEMkJg==&#x27; &#x27;sha512-vkFVXkNtq/l/d6U4MKQGHiDGwbXjgTPpTCu3wKtK0cB6ePonqkLKyLJomcMu9TWl/zhpqCjG8JoSkTMKWUoviw==&#x27; &#x27;sha512-seZtT4OK0G0jP5mZuC/cwNtJEmA0/xUVe7xLuDAyrF8an01bWi2NjaU+s+tZBIB7//P5eptsf+AHrZ6jIq9lrQ==&#x27; &#x27;sha512-MjdGN+7DC5fN61P1tHM8jKehWePiZzw/ZW9VuYQRbOGgb7mopMy/yQc53UkBY9KSnLPwq+VsQA8y6Mmt7JSyaQ==&#x27; &#x27;sha512-jn1Lh8H3+KcXP5S+SQ2UvJ84lNDyD8MwzcfM9YvQkd+qICF6YMXm68XYpaYGaoiBkx5XZsBYjUV6xtL/UNRxAA==&#x27;; script-src-elem &#x27;sha512-oV6R4Jmx/JkiURFjVji+Ud1EDqscWA/A6WzRc9hMLrbdXDp8oMyG5XR7YEiyyF8ZtPN3+hppiKpKMz2ioWrcrw==&#x27; &#x27;self&#x27; &#x27;sha512-GJrooVFsPmetluQPl5u+dk+gB6O/E8DJCm5wS4yMxA85ZBhs+8vdta1aKaqVJ6SXeYpzL2cyCaIMA5fbCAzFsQ==&#x27; &#x27;sha512-oozhVYKPPbIZCUJee8P/X3zMmDS9gUgUerkXaqESZ9u+C+JXBCJGpezm8Vjv5NDOfWuTS2tDufLizUjs+FUZrA==&#x27; &#x27;sha512-4XFDNCvsz9MkkGbTXq9f7qN+GfydFnpFLybaJG+GnLUhAkfgzVRXPIYoC2Jo2V1KobiVnqsOPKeFNAu3EmqZLA==&#x27; &#x27;sha512-xq/mGiBGR804xfxqdNK54gpwdoUlTAjZ5bfjTfD8D18Bfi1qW3iit5KRYGbEOx2YXmooAup28gPta2Ai0JDUtA==&#x27; &#x27;sha512-Du2fNyYTUN1Zltua+n3lH8on0RzFkBzDBRvrX9jR2bDU7aPAbr+uvB5QKdd0FRVrCRu9MwUUDErLr09AF3Y0Rw==&#x27; &#x27;sha512-Z1AAFEfhc+4WjggguGHEH20EVZPJHpLj7IXfXPAJQXbtiyXV3U1npf/mSpRjm1J4tdhGtWqsV50n0nyCcpWiiQ==&#x27; &#x27;sha512-Qf/H8wMEz9EtwgFlrN13mt+/zh9eT/T0xWOS/MAMoTeQT1VHL+IRM4BbHRBV/FsWjgF2/pDxgFx1BXVSdkdVkQ==&#x27; &#x27;sha512-6LbI18bzjDZfAMht/DcbIRhhzcGJ0TL69/nc5SSMt0QHhhjLwOSOUsoOrT56dPUusoKXHGaakWUDmQJOpAAsWw==&#x27; &#x27;sha512-LUVLPsAbZebhNt0DMXad384s6103eebT+kHwqwr3BZiSTyMqol1A9erOWOfneSMEQjMllc2REjSJ3LeFtYaB9g==&#x27; &#x27;sha512-o7ZMwAp8qYRbeDGL0cp8IhxK5WkkHnUn0i5I/zr4OryG3yhkXuBb+hFjZit7xH8mXKUoE3jdLYhk6MRdQ3e8Ug==&#x27; &#x27;sha512-7qzR7V7xRIwXbwzAXNTOHpPsYVF8EsD4pV9nH+cYxE3cREE0mNR+MdIbzqtLCdbpBACy0b9cZ3CwjX2Z9nQmlQ==&#x27; &#x27;sha512-2UCaz2I8HFzjxwr0EoNBWNCW7vbEMdv8AtWqNJY+P/52EJHcb94jtxMrZioP3YEfsUvko4p4U6mYvNvY6Mg9DQ==&#x27; &#x27;sha512-aSbJo8bEB7S91jbdQ+bBgjPBY+jOyoo6HV/Nt7Z8+YVvjbKQ8uS5J/ggl8u5G3dzdJ8DtfNSrg+QHBlbgYLEmA==&#x27; &#x27;sha512-DnysiUTVfvWJSJzOuOPK13ZC40iR2OLJgCFe2QZUSclWqWWyaKR4FW/6V7PrkCYG1fdl9u2E2kLkVPYV3ckpAQ==&#x27; &#x27;sha512-+N+I+QydgUOS9s4CAPwqU4CsKjs9jGn9+J4GZ+d7ENdhpjYgFpp5ZOoO2ucUqEI2yPGQUVsb8IzyQZTT9gKRbg==&#x27; &#x27;sha512-9floGwMk3aV8nZeIa7GWdm/RdorZYFR9sxtcsh1dBQOIf4mVjI3T/xJcKrDCFFVKutFZU/eD2BZcDWjsXBp27w==&#x27; &#x27;sha512-6vKUB+ZCXCzjJOcngbK05QUJAaLtTpKgHT3nE0khdHhIISmFTlBllyn4XRMlGt6l9H8Z/3IN/DXdflsUCXjC7A==&#x27; &#x27;sha512-Fkn4eV+ajtOPSHBy+riI5yqyTIhcB0FkJBtIYAnt0gECps2Sjq3+/UyurvTgq5sdywYe0nY963BwYjmZ6KeJFA==&#x27; &#x27;sha512-FHSza95XooSj6RMO3vyyx0P1MOwloAN8P/nrLqi49h77bUPtlsIjDfkHHcKRKbwaiuzwu4GkF7XTXIS1Ei1sBw==&#x27; &#x27;sha512-01N9U+yVxiyXuAU2qgdlVnqxtQ8nys/CZouYO9fK8/rZ3BkzpwQxq+m2f8/Rc9J8YPNCcJVrsUdse1pZY6Iccw==&#x27; &#x27;sha512-cVSo0SQlXNiMO+RYHS6745Qh8Qpu7P7TR3/vSHPtdG1IrPRp23Ubujr1/xUOTpkniZQVEDc/GnOwUeR34ERFxA==&#x27; &#x27;sha512-i7Ay5/Cb24fnFrRQl5riwMOqJ1u4J7fgKzz2WTnBEcWO06Od82cQDQNl/zsk4DS/MSgokYQbxQhOWO7EOEMkJg==&#x27; &#x27;sha512-vkFVXkNtq/l/d6U4MKQGHiDGwbXjgTPpTCu3wKtK0cB6ePonqkLKyLJomcMu9TWl/zhpqCjG8JoSkTMKWUoviw==&#x27; &#x27;sha512-seZtT4OK0G0jP5mZuC/cwNtJEmA0/xUVe7xLuDAyrF8an01bWi2NjaU+s+tZBIB7//P5eptsf+AHrZ6jIq9lrQ==&#x27; &#x27;sha512-MjdGN+7DC5fN61P1tHM8jKehWePiZzw/ZW9VuYQRbOGgb7mopMy/yQc53UkBY9KSnLPwq+VsQA8y6Mmt7JSyaQ==&#x27; &#x27;sha512-jn1Lh8H3+KcXP5S+SQ2UvJ84lNDyD8MwzcfM9YvQkd+qICF6YMXm68XYpaYGaoiBkx5XZsBYjUV6xtL/UNRxAA==&#x27;; script-src-attr &#x27;none&#x27;; style-src &#x27;self&#x27; https://fonts.googleapis.com &#x27;sha512-1LEjt8c3XpczrPVDvgPvqqBxFfD4RwusDCsUlV+NhfnquPqFzx8zeiPIdcWL1m/IKwyZAvL9FSddgDp89OYhvw==&#x27; &#x27;sha512-kGxMkTnWNXyx7okNd1NoFEmUpy2UaETxiyhvR6CQwMMyEiqGPdN7nX/GrsTHeeuooinExEsp5H4Pel7RDHfAfg==&#x27; &#x27;sha512-4liJPB0+WSvwZ/D+/ZnplVIQxqmB846fD7KE0wz2P30FqrXc1e88gXIf9HueROqGd9FWEtKDLZuNaGbBQWXUrQ==&#x27; &#x27;sha512-c3uzKDRohz5+icH/feOsdpXgSuWaL8cSWYDI1/TCVnj2NU5EhqP27N7vKIeTbK87ya32DsCTK9n3J/7x8C1GGQ==&#x27; &#x27;sha512-RByjnmcR2aYT0aPXmaCDvp2QcX01dau95aKm45EtmUdCVVC/MK44Ua1TuyKp7Lg1iijGHkQEbTUSGxgcuSB4IQ==&#x27; &#x27;sha512-MyZ9NoEjFiqKEeHtOE0bkpYxA1FnA+3CfmRF7IrFojZS5t5Imktkh5hyB2pErOEz2cqOBQHgxXBu2v9OQ9VRjQ==&#x27; &#x27;sha512-TX2S4o9fKMd7MRkcKJ6s6lv1qIoDzRlft0brsCA1vorbxjq+Dzo0MybM632RZQLMZ3WtUmVjltfqWZXydjozxg==&#x27; &#x27;sha512-zJdE7jn4Zja99u//L33m46+HZvcgmBMFPOUEV/B6dvHvskxvOOSej3HyG9hlYa3KihYZKZjYJZa5LSWjc/8Haw==&#x27; &#x27;sha512-gBIcnPvwC2sOr15HqpkakVupeYvGS+BDiCwJy8dW6llVglASZDjqV3cJ6EU6UVx6mYp588XLEpnGOLQ4aH31Cg==&#x27; &#x27;sha512-vU22RlNkzUmL7LpqCjDjKhJVnR4u4GLQWBxQ/dP6WcDntPd+YmRxr0J9xVcmmvbA3ZHTkaDbqluAOVYvumZPgQ==&#x27; &#x27;sha512-bkIfqu5pKq+gsTG6XNXZJRS1m8SDF+dnS/DVI1o7JvKufEAnjd2tSPm016BVzCf0A4Ar4XooN0R1AQv8gDESCQ==&#x27; &#x27;sha512-ZRt1f80RmzekhH1Cw/d2O5qlZsaqPhq/DrEyv9ns+SPWVJRkfcWb9njPxzWphN8UHavq8uv9Pd5f0Z4r63/6cw==&#x27; &#x27;sha512-BNt3/LwPTPIF7bOPx/IJ7iAkLDhbZyJgD0ckDKtqyo0NHgyZdz1Qk69Fl0RmkqbAxRuv7v9k3lcN0HtaULVWlQ==&#x27; &#x27;sha512-jWYDl/Z52OKtcvRLdiGjL2nKj1d7hWe+AjafcghLVs4HCWAnPMFQnYMb1Y5KTQvGr1BrWJWW78el1atHwD8pSA==&#x27; &#x27;sha512-h0xrUXX1h1viY7gp0D1Jwe45Vs+ZDSUlR8n53jx8r5q3RP0IpL1K9mGKDYpkhQ+pnKuJZKsFU7yCJWnt6ohHNQ==&#x27; &#x27;sha512-EegNuvpqTcsmL6PtmpMrH1CZt7ye0mqlvcGKixkoNgp1wmK2WWHr+QVjEzmCeNIXCwE/g5NC/OT9jL5i0e3y8Q==&#x27; &#x27;sha512-/QqblG9fjNURNCstTU7L2WzUV64+MpJ1XQBVdhYJozgq4WLfE0sa3l3WbAXf05KwDa9Wy4ZCL6t4+8zJBG6z0w==&#x27; &#x27;sha512-c23p5EbnxBvRKO7RRiWBUGqPsrQUnmhqsduIdvka8FJ0wvWCXDgTxHuQWhvzFV4+0Ym4MBx+vXcqZhIVupFRcA==&#x27;; style-src-elem &#x27;self&#x27; https://fonts.googleapis.com &#x27;sha512-1LEjt8c3XpczrPVDvgPvqqBxFfD4RwusDCsUlV+NhfnquPqFzx8zeiPIdcWL1m/IKwyZAvL9FSddgDp89OYhvw==&#x27; &#x27;sha512-kGxMkTnWNXyx7okNd1NoFEmUpy2UaETxiyhvR6CQwMMyEiqGPdN7nX/GrsTHeeuooinExEsp5H4Pel7RDHfAfg==&#x27; &#x27;sha512-4liJPB0+WSvwZ/D+/ZnplVIQxqmB846fD7KE0wz2P30FqrXc1e88gXIf9HueROqGd9FWEtKDLZuNaGbBQWXUrQ==&#x27; &#x27;sha512-c3uzKDRohz5+icH/feOsdpXgSuWaL8cSWYDI1/TCVnj2NU5EhqP27N7vKIeTbK87ya32DsCTK9n3J/7x8C1GGQ==&#x27; &#x27;sha512-RByjnmcR2aYT0aPXmaCDvp2QcX01dau95aKm45EtmUdCVVC/MK44Ua1TuyKp7Lg1iijGHkQEbTUSGxgcuSB4IQ==&#x27; &#x27;sha512-MyZ9NoEjFiqKEeHtOE0bkpYxA1FnA+3CfmRF7IrFojZS5t5Imktkh5hyB2pErOEz2cqOBQHgxXBu2v9OQ9VRjQ==&#x27; &#x27;sha512-TX2S4o9fKMd7MRkcKJ6s6lv1qIoDzRlft0brsCA1vorbxjq+Dzo0MybM632RZQLMZ3WtUmVjltfqWZXydjozxg==&#x27; &#x27;sha512-zJdE7jn4Zja99u//L33m46+HZvcgmBMFPOUEV/B6dvHvskxvOOSej3HyG9hlYa3KihYZKZjYJZa5LSWjc/8Haw==&#x27; &#x27;sha512-gBIcnPvwC2sOr15HqpkakVupeYvGS+BDiCwJy8dW6llVglASZDjqV3cJ6EU6UVx6mYp588XLEpnGOLQ4aH31Cg==&#x27; &#x27;sha512-vU22RlNkzUmL7LpqCjDjKhJVnR4u4GLQWBxQ/dP6WcDntPd+YmRxr0J9xVcmmvbA3ZHTkaDbqluAOVYvumZPgQ==&#x27; &#x27;sha512-bkIfqu5pKq+gsTG6XNXZJRS1m8SDF+dnS/DVI1o7JvKufEAnjd2tSPm016BVzCf0A4Ar4XooN0R1AQv8gDESCQ==&#x27; &#x27;sha512-ZRt1f80RmzekhH1Cw/d2O5qlZsaqPhq/DrEyv9ns+SPWVJRkfcWb9njPxzWphN8UHavq8uv9Pd5f0Z4r63/6cw==&#x27; &#x27;sha512-BNt3/LwPTPIF7bOPx/IJ7iAkLDhbZyJgD0ckDKtqyo0NHgyZdz1Qk69Fl0RmkqbAxRuv7v9k3lcN0HtaULVWlQ==&#x27; &#x27;sha512-jWYDl/Z52OKtcvRLdiGjL2nKj1d7hWe+AjafcghLVs4HCWAnPMFQnYMb1Y5KTQvGr1BrWJWW78el1atHwD8pSA==&#x27; &#x27;sha512-h0xrUXX1h1viY7gp0D1Jwe45Vs+ZDSUlR8n53jx8r5q3RP0IpL1K9mGKDYpkhQ+pnKuJZKsFU7yCJWnt6ohHNQ==&#x27; &#x27;sha512-EegNuvpqTcsmL6PtmpMrH1CZt7ye0mqlvcGKixkoNgp1wmK2WWHr+QVjEzmCeNIXCwE/g5NC/OT9jL5i0e3y8Q==&#x27; &#x27;sha512-/QqblG9fjNURNCstTU7L2WzUV64+MpJ1XQBVdhYJozgq4WLfE0sa3l3WbAXf05KwDa9Wy4ZCL6t4+8zJBG6z0w==&#x27; &#x27;sha512-c23p5EbnxBvRKO7RRiWBUGqPsrQUnmhqsduIdvka8FJ0wvWCXDgTxHuQWhvzFV4+0Ym4MBx+vXcqZhIVupFRcA==&#x27;; style-src-attr &#x27;none&#x27;; font-src &#x27;self&#x27; https://fonts.gstatic.com data:; img-src &#x27;self&#x27; data: https: blob:; connect-src &#x27;self&#x27; https://diracgroup.store https://www.diracgroup.store https://api.diracgroup.store; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-src &#x27;none&#x27;; child-src &#x27;self&#x27; blob:; frame-ancestors &#x27;none&#x27;; worker-src &#x27;self&#x27; blob:; manifest-src &#x27;self&#x27;; media-src &#x27;self&#x27; data:;">
 <script id="dirac-security-boundary-20260905" data-page="keamanan.html">
 (function(){
   'use strict';
@@ -257,7 +265,7 @@
   function check(value, context){
     if(safeString(value).length > 65536) return {detected:true,family:'oversized_input'};
     var text = normalize(value);
-    var samples = [text, text.replace(/\/\*[\s\S]{0,256}?\*\//g,''), text.replace(/\/\*[\s\S]{0,256}?\*\//g,' ')];
+    var samples = Array.from(new Set([text, text.replace(/\/\*[\s\S]{0,256}?\*\//g,''), text.replace(/\/\*[\s\S]{0,256}?\*\//g,' ')]));
     if(ssrfUrl(text)) return {detected:true,family:'ssrf',normalized:text};
     for(var i=0;i<RULES.length;i++) for(var s=0;s<samples.length;s++) if(RULES[i][1].test(samples[s])) return {detected:true,family:RULES[i][0],normalized:text};
     if(context && context.ai === true && PROMPT_RULE.test(text)) return {detected:true,family:'prompt_injection',normalized:text};
@@ -353,6 +361,12 @@
   function suffix(){
     var url = new URL(location.href), path = '/' + page;
     if(url.pathname.toLowerCase().indexOf(path) !== 0) return false;
+    // These existing navigation markers only select a server-verified handoff flow.
+    // They never establish identity or replace the target page's session checks.
+    if(url.pathname === path && url.href === url.origin + path + url.hash){
+      if(page === 'dashboard.html' && /^#dirac-handoff-(?:parfum|pesanan|security)$/.test(url.hash)) return false;
+      if(page === 'keamanan.html' && url.hash === '#dirac-handoff-pending-v321') return false;
+    }
     return url.href.slice(url.origin.length).length > path.length;
   }
   function inspectLocation(){
@@ -526,7 +540,7 @@
     order:'/pesanan.html',
     shop:'/parfum.html',
     security:'/keamanan.html',
-    cs:'/livechat/ce',
+    cs:'/chat.html',
     domain:'/domain.html',
     topup:'/topup.html',
     project:'/website.html'
@@ -3722,7 +3736,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
 <div><p class="dcp-footer-title">Layanan</p><nav aria-label="Layanan di footer" class="dcp-footer-links"><a href="https://panel.diracgroup.store/layanan.html">Semua Layanan</a><a href="https://panel.diracgroup.store/parfum-lokal.html">Parfum</a><a href="/domain.html" data-dirac-service-page="domain.html">Jual Beli Domain</a><a href="/website.html" data-dirac-service-page="website.html">Jasa Website</a><a href="/topup.html" data-dirac-service-page="topup.html">Top Up Game</a></nav></div>
 <div><p class="dcp-footer-title">Wawasan</p><nav aria-label="Wawasan di footer" class="dcp-footer-links"><a href="https://panel.diracgroup.store/pengetahuan.html">Pusat Pengetahuan</a><a href="https://panel.diracgroup.store/berita.html">Berita &amp; Wawasan</a><a href="https://panel.diracgroup.store/berita-panduan-parfum.html">Panduan Parfum</a><a href="https://panel.diracgroup.store/berita-checklist-domain.html">Checklist Domain</a><a href="https://panel.diracgroup.store/berita-brief-website.html">Brief Website</a></nav></div>
 <div><p class="dcp-footer-title">Perusahaan</p><nav aria-label="Perusahaan di footer" class="dcp-footer-links"><a href="https://panel.diracgroup.store/tentang-kami.html">Tentang Kami</a><a href="https://panel.diracgroup.store/portfolio.html">Portfolio</a><a href="https://panel.diracgroup.store/case-study-digdaya.html">Case Study</a><a href="https://panel.diracgroup.store/kemitraan.html">Kemitraan</a></nav></div>
-<div><p class="dcp-footer-title">Dukungan</p><nav aria-label="Dukungan di footer" class="dcp-footer-links"><a href="https://panel.diracgroup.store/dukungan.html">Pusat Dukungan</a><a href="https://panel.diracgroup.store/faq.html">FAQ</a><a href="https://panel.diracgroup.store/trust-center.html">Trust Center</a><a href="https://panel.diracgroup.store/keamanan.html">Keamanan</a><a href="https://panel.diracgroup.store/pengaduan.html">Pengaduan</a><a href="https://panel.diracgroup.store/kontak.html">Kontak</a></nav></div>
+<div><p class="dcp-footer-title">Dukungan</p><nav aria-label="Dukungan di footer" class="dcp-footer-links"><a href="https://panel.diracgroup.store/dukungan.html">Pusat Dukungan</a><a href="https://panel.diracgroup.store/faq.html">FAQ</a><a href="https://panel.diracgroup.store/trust-center.html">Trust Center</a><a href="https://security.diracgroup.store/keamanan.html">Keamanan</a><a href="https://panel.diracgroup.store/pengaduan.html">Pengaduan</a><a href="https://panel.diracgroup.store/kontak.html">Kontak</a></nav></div>
 </div>
 <div aria-label="Hubungi PT Digdaya Inovasi Nusantara" class="dcp-shell dcp-footer-contact-us" id="diracCorporateContactDetails">
 <div class="dcp-footer-contact-copy">
@@ -3971,7 +3985,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
 
     function apiUrl(action) {
       action = String(action || '').trim();
-      if (!ALLOWED_API_ACTIONS[action]) throw new Error('Tindakan ini tidak diizinkan.');
+      if (!Object.prototype.hasOwnProperty.call(ALLOWED_API_ACTIONS, action)) throw new Error('Tindakan ini tidak diizinkan.');
       const base = action === CONFIG.logoutAction ? CONFIG.sessionApiBase : CONFIG.securityApiBase;
       const url = new URL(base, window.location.origin);
       url.searchParams.set('action', action);
@@ -4022,7 +4036,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
         window.crypto.getRandomValues(bytes);
         return prefix + '_' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
       } catch (_) {
-        return prefix + '_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+        throw new Error('DIRAC_SECURE_RANDOM_UNAVAILABLE');
       }
     }
 
@@ -4046,6 +4060,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
           mode: 'cors',
           credentials: 'include',
           cache: 'no-store',
+          redirect: 'error',
           headers: buildAuthHeaders(hasBody, options.headers || {}),
           body: hasBody ? JSON.stringify(options.body) : undefined,
           signal: controller.signal,
@@ -4394,7 +4409,13 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
       });
       if (!ok) return;
       setButtonBusy(button, true, 'Mengamankan');
-      const requestId = cryptoRandomId('not_me');
+      let requestId;
+      try{ requestId = cryptoRandomId('not_me'); }
+      catch(_){
+        toast('Tindakan dihentikan', 'Sumber acak keamanan tidak tersedia. Muat ulang browser untuk mencoba kembali.');
+        setButtonBusy(button, false);
+        return;
+      }
       const revoke = await safeFetchJson(CONFIG.revokeSessionAction, { method:'POST', body:{ session_id:sessionId, idempotency_key:requestId + '_revoke' } });
       const others = await safeFetchJson(CONFIG.revokeOtherSessionsAction, { method:'POST', body:{ idempotency_key:requestId + '_others' } });
       const review = await safeFetchJson(CONFIG.accountRequestAction, { method:'POST', body:{ reason:'Pelanggan menandai perangkat ini bukan miliknya dari Pusat Keamanan.', session_id:sessionId, idempotency_key:requestId + '_review' } });
@@ -4449,7 +4470,13 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
       if (!(await diracPremiumConfirm({title:'Ajukan pemeriksaan keamanan?',message:'Permintaan akan diperiksa oleh sistem keamanan.',confirmText:'Ajukan pemeriksaan',danger:false}))) return;
       const btn = $('#securityReviewBtn');
       setButtonBusy(btn, true, 'Memproses');
-      const requestId = cryptoRandomId('security_review');
+      let requestId;
+      try{ requestId = cryptoRandomId('security_review'); }
+      catch(_){
+        toast('Tindakan dihentikan', 'Sumber acak keamanan tidak tersedia. Muat ulang browser untuk mencoba kembali.');
+        setButtonBusy(btn, false);
+        return;
+      }
       const result = await safeFetchJson(CONFIG.accountRequestAction, {
         method: 'POST',
         body: {
@@ -5686,10 +5713,14 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
   var LOGOUT_ENDPOINT = SESSION_API_BASE + '?action=domain_logout';
   var IDLE_LIMIT_MS = 15 * 60 * 1000;
   var CHECK_INTERVAL_MS = 5000;
+  var SESSION_VERIFY_TIMEOUT_MS = 9000;
+  var SESSION_ACTIVITY_TOUCH_TIMEOUT_MS = 5500;
   var ACTIVITY_BACKEND_SYNC_MIN_MS = 55 * 1000;
   var ACTIVITY_KEY = 'dirac_protected_last_activity_v1';
   var LOGOUT_STAMP_KEY = 'dirac_protected_last_logout_v1';
   var loggingOut = false;
+  var sessionDenied = false;
+  var sessionGeneration = 0;
   var checking = false;
   var checkTimer = 0;
   var activitySyncTimer = 0;
@@ -5704,6 +5735,32 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
   function withCacheBust(url){
     var sep = String(url || '').indexOf('?') === -1 ? '?' : '&';
     return String(url || '') + sep + '_t=' + now();
+  }
+
+  function fetchSessionWithTimeout(url, options, timeoutMs){
+    var limit = Math.max(1000, Number(timeoutMs || SESSION_VERIFY_TIMEOUT_MS) || SESSION_VERIFY_TIMEOUT_MS);
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var opts = {};
+    Object.keys(options || {}).forEach(function(key){ opts[key] = options[key]; });
+    if(controller) opts.signal = controller.signal;
+    return new Promise(function(resolve, reject){
+      var settled = false;
+      var timer = setTimeout(function(){
+        if(settled) return;
+        settled = true;
+        try{ if(controller) controller.abort(); }catch(_){}
+        var err = new Error('dirac_protected_session_timeout');
+        err.name = 'DiracProtectedSessionTimeout';
+        reject(err);
+      }, limit);
+      function done(fn, value){
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn(value);
+      }
+      fetch(url, opts).then(function(res){ done(resolve, res); }, function(err){ done(reject, err); });
+    });
   }
 
   function setStore(key, value){
@@ -5725,6 +5782,15 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
   }
 
   function purgeClientAuthStorage(){
+    // An authoritative denial is terminal for this document, including in-flight checks.
+    sessionDenied = true;
+    sessionGeneration += 1;
+    document.documentElement.removeAttribute('data-dirac-protected-session');
+    document.documentElement.removeAttribute('data-dashboard-backend');
+    document.documentElement.removeAttribute('data-dashboard-unlocked');
+    window.__DIRAC_DASHBOARD_BACKEND_USER__ = null;
+    window.__DIRAC_DASHBOARD_BACKEND_STATUS__ = null;
+    window.__DIRAC_BACKEND_MFA_CONTEXT__ = null;
     var keys = [
       'dirac_auth_session_v1',
       'dirac_auth_a2f_v1',
@@ -5736,7 +5802,9 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
       'sb-auth-token',
       'supabase.auth.token'
     ];
-    [window.localStorage, window.sessionStorage].forEach(function(store){
+    ['localStorage', 'sessionStorage'].forEach(function(name){
+      var store;
+      try{ store = window[name]; }catch(_){ return; }
       if(!store) return;
       keys.forEach(function(key){
         try{ store.removeItem(key); }catch(_){}
@@ -5872,7 +5940,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
   }
 
   function queueBackendSessionTouchFromActivity(){
-    if(loggingOut || checking) return;
+    if(loggingOut || sessionDenied || checking) return;
     if(!isVerifiedPage()) return;
     var at = now();
     if((at - Number(lastBackendActivitySyncMs || 0)) < ACTIVITY_BACKEND_SYNC_MIN_MS) return;
@@ -5884,7 +5952,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
   }
 
   async function touchBackendSessionFromActivity(){
-    if(loggingOut || checking) return;
+    if(loggingOut || sessionDenied || checking) return;
     if(!isAllowedSecureContext()){
       purgeClientAuthStorage();
       removeStore(ACTIVITY_KEY);
@@ -5892,17 +5960,19 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
       replaceToLogin('https');
       return;
     }
+    var requestGeneration = sessionGeneration;
     try{
-      var res = await fetch(withCacheBust(VERIFY_ENDPOINT), {
+      var res = await fetchSessionWithTimeout(withCacheBust(VERIFY_ENDPOINT), {
         method: 'GET',
         mode: 'cors',
         credentials: 'include',
         cache: 'no-store',
+        redirect: 'error',
         headers: { 'Accept': 'application/json' }
       });
       var data = null;
       try{ data = await res.clone().json(); }catch(_){ data = null; }
-      if(loggingOut) return;
+      if(loggingOut || sessionDenied || requestGeneration !== sessionGeneration) return;
       if(!(res.ok && isStrictVerifiedSessionPayload(data) && rememberSessionDeadline(data))){
         purgeClientAuthStorage();
         removeStore(ACTIVITY_KEY);
@@ -5913,8 +5983,11 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
       }
       lastBackendActivitySyncMs = now();
     }catch(_){
-      // Koneksi aktivitas yang gagal tidak langsung logout agar scroll normal tidak terganggu.
-      // Validasi ketat tetap berjalan pada load/focus/pageshow/visible dan saat timer idle.
+      if(requestGeneration !== sessionGeneration) return;
+      purgeClientAuthStorage();
+      removeStore(ACTIVITY_KEY);
+      setLocked(true);
+      replaceToLogin('network');
     }
   }
 
@@ -5972,7 +6045,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
 
   async function verifyBackendSession(reason){
     if(window.DiracSecurityBoundary.pending()) return false;
-    if(loggingOut || checking) return;
+    if(loggingOut || sessionDenied || checking) return;
     if(isIdleExpired()){
       await forceLogout('idle');
       return;
@@ -5989,18 +6062,20 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
     setChecking(true);
     setLocked(false);
 
+    var requestGeneration = sessionGeneration;
     try{
-      var res = await fetch(withCacheBust(VERIFY_ENDPOINT), {
+      var res = await fetchSessionWithTimeout(withCacheBust(VERIFY_ENDPOINT), {
         method: 'GET',
         mode: 'cors',
         credentials: 'include',
         cache: 'no-store',
+        redirect: 'error',
         headers: { 'Accept': 'application/json' }
       });
 
       var data = null;
       try{ data = await res.clone().json(); }catch(_){ data = null; }
-      if(loggingOut) return;
+      if(loggingOut || sessionDenied || requestGeneration !== sessionGeneration) return;
 
       var user = data && data.user;
       var ok = !!(res.ok && isStrictVerifiedSessionPayload(data) && rememberSessionDeadline(data));
@@ -6014,21 +6089,24 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
         return;
       }
 
-      if(loggingOut) return;
+      if(loggingOut || sessionDenied || requestGeneration !== sessionGeneration) return;
       if(isIdleExpired()){ await forceLogout('idle'); return; }
       document.documentElement.setAttribute('data-dirac-protected-session', 'verified');
       lastBackendActivitySyncMs = now();
       setLocked(false);
       setChecking(false);
     }catch(_){
+      if(requestGeneration !== sessionGeneration) return;
       purgeClientAuthStorage();
       removeStore(ACTIVITY_KEY);
       setStore(LOGOUT_STAMP_KEY, now());
       setLocked(true);
       replaceToLogin(reason || 'network');
     }finally{
-      checking = false;
-      setChecking(false);
+      if(requestGeneration === sessionGeneration || sessionDenied){
+        checking = false;
+        setChecking(false);
+      }
     }
   }
 
@@ -6067,6 +6145,8 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
     });
 
     window.addEventListener('pagehide', function(){
+      sessionGeneration += 1;
+      checking = false;
       setChecking(false);
       setLocked(true);
       try{ document.documentElement.removeAttribute('data-dirac-protected-session'); }catch(_){}
@@ -6086,7 +6166,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
   function startIdleTimer(){
     clearInterval(checkTimer);
     checkTimer = setInterval(function(){
-      if(loggingOut) return;
+      if(loggingOut || sessionDenied) return;
       if(isIdleExpired()){
         forceLogout('idle');
       }
@@ -6757,7 +6837,7 @@ html body #diracNavigationBusy{background:var(--dirac-solid-canvas)!important;}
       if(tracking){
         e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
         closeMenuStable();
-        window.location.href = 'cekresi.html';
+        window.location.href = window.DiracRoutes.origin('shop') + '/cekresi.html';
         return;
       }
       var link = closest(target, 'a[href]');
